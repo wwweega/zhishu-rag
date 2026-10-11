@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    name: 单元测试（降级模式，无需外部服务）
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 运行单元测试
+        env:
+          # 全部走降级后端：本地向量库 + SQLite + 内存缓存 + mock 模型
+          VECTOR_BACKEND: local
+          METADATA_BACKEND: sqlite
+          CACHE_BACKEND: memory
+          LLM_API_KEY: ""
+          EMBED_PROVIDER: hash
+          ENABLE_TRACE: "false"
+        run: python -m pytest tests/ -q
+
+      - name: 端到端冒烟（mock 模式）
+        env:
+          VECTOR_BACKEND: local
+          METADATA_BACKEND: sqlite
+          CACHE_BACKEND: memory
+          LLM_API_KEY: ""
+          EMBED_PROVIDER: hash
+          ENABLE_TRACE: "false"
+        run: python -m scripts.demo --rebuild
+
+  eval-gate:
+    name: 质量门禁（mock 模式跑通，真实模型可选）
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # mock 模式下模型能力不可用，故意**不启用 --gate**，
+      # 只验证评测流水线本身能跑通、不报错、指标能产出。
+      # 真实模型门禁在本地用 `python -m scripts.run_eval --gate` 执行。
+      - name: 跑通评测流水线（mock）
+        env:
+          VECTOR_BACKEND: local
+          METADATA_BACKEND: sqlite
+          CACHE_BACKEND: memory
+          LLM_API_KEY: ""
+          EMBED_PROVIDER: hash
+          ENABLE_TRACE: "false"
+        run: |
+          python -m scripts.ingest --rebuild
+          python -m scripts.run_eval --no-judge

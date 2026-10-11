@@ -1,0 +1,6 @@
+__pycache__
+.git
+.venv
+data/index
+data/traces
+*.pyc

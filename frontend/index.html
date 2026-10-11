@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>知枢 · 企业级 RAG 知识中枢</title>
+<style>
+  :root{--navy:#224771;--bar:#e9eef5;--ink:#1c2431;--sub:#5a6478;--ok:#0f7b52;--warn:#a33;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#f1f3f7;color:var(--ink);line-height:1.6}
+  .wrap{max-width:920px;margin:0 auto;padding:28px 18px 60px}
+  h1{font-size:22px;color:var(--navy);letter-spacing:2px;margin-bottom:4px}
+  .sub{color:var(--sub);font-size:13px;margin-bottom:18px}
+  .card{background:#fff;border-radius:10px;padding:18px;box-shadow:0 2px 12px rgba(20,30,50,.08);margin-bottom:14px}
+  textarea{width:100%;min-height:74px;padding:11px;border:1px solid #cdd6e2;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical}
+  .row{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;align-items:center}
+  button{background:var(--navy);color:#fff;border:0;border-radius:8px;padding:9px 20px;font-size:14px;cursor:pointer}
+  button:hover{opacity:.9} button:disabled{opacity:.5;cursor:not-allowed}
+  input[type=text]{padding:8px 10px;border:1px solid #cdd6e2;border-radius:8px;font-size:13px}
+  .ans{white-space:pre-wrap;font-size:15px}
+  .badge{display:inline-block;font-size:12px;padding:2px 9px;border-radius:20px;background:var(--bar);color:var(--navy);margin-right:6px}
+  .badge.ok{background:#e6f4ed;color:var(--ok)} .badge.warn{background:#fdecec;color:var(--warn)}
+  .ev{border-left:3px solid var(--navy);background:#f8fafd;padding:9px 12px;margin:7px 0;border-radius:0 6px 6px 0;font-size:13px;color:#34405a}
+  .meta{font-size:12px;color:var(--sub);margin-top:8px}
+  .stage{font-size:13px;color:var(--navy);min-height:20px}
+  code{background:#eef2f8;padding:1px 5px;border-radius:4px;font-size:12px}
+  .verified{color:var(--ok);font-size:12px} .unverified{color:var(--warn);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>知枢 · 企业级 RAG 知识中枢</h1>
+  <div class="sub">混合检索（BM25 + 向量 + RRF）· 重排 · 句级引用溯源 · 证据不足拒答 · 全链路可观测</div>
+
+  <div class="card">
+    <textarea id="q" placeholder="请输入问题，例如：年休假最多可以顺延到什么时候？">年休假最多可以顺延到什么时候？</textarea>
+    <div class="row">
+      <input type="text" id="dept" placeholder="部门过滤（可选，如 人力资源部）">
+      <button id="ask">提问</button>
+      <button id="askStream" style="background:#4a5568">流式提问（SSE）</button>
+    </div>
+    <div class="stage" id="stage"></div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none">
+    <div id="badges"></div>
+    <div class="ans" id="answer"></div>
+    <div id="cites"></div>
+    <div class="meta" id="meta"></div>
+  </div>
+
+  <div class="card">
+    <div style="font-weight:700;color:var(--navy);margin-bottom:8px">已入库文档 / 运行统计</div>
+    <div id="stats" style="font-size:13px;color:#34405a"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+async function loadStats(){
+  try{
+    const [s, d] = await Promise.all([fetch('/api/stats').then(r=>r.json()), fetch('/api/docs/list').then(r=>r.json())]);
+    $('stats').innerHTML = `向量后端 <code>${s.vector_backend}</code>｜向量数 <code>${s.vector_count}</code>｜元数据 <code>${s.metadata_backend}</code>｜缓存 <code>${s.cache_backend}</code>｜LLM <code>${s.llm_mock?'mock':'real'}</code><br>文档 ${d.count} 篇：` +
+      d.documents.map(x=>`${x.title}（${x.dept||'未分类'}）`).join('、');
+  }catch(e){ $('stats').textContent = '统计加载失败：'+e; }
+}
+function render(r){
+  $('resultCard').style.display='block';
+  const b = [];
+  b.push(`<span class="badge ${r.refused?'warn':'ok'}">${r.refused?'拒答':'已回答'}</span>`);
+  b.push(`<span class="badge">召回 ${r.retrieval_stats?.retrieved ?? '-'} → 证据 ${r.retrieval_stats?.reranked ?? '-'}</span>`);
+  if(r.cached) b.push('<span class="badge">缓存命中</span>');
+  $('badges').innerHTML = b.join('');
+  $('answer').textContent = r.answer || '（无回答）';
+  $('cites').innerHTML = (r.citations||[]).map(c=>`<div class="ev">
+      <b>证据 ${c.evidence_id}</b> · <code>${c.chunk_id}</code>
+      ${c.verified?'<span class="verified">✓ 已核对原文</span>':'<span class="unverified">✗ 未核对</span>'}
+      ${c.corrected?'<span class="badge">编号已自愈</span>':''}
+      <div style="margin-top:4px">“${(c.quote||c.claim||'').slice(0,140)}”</div></div>`).join('') || '';
+  $('meta').textContent = `耗时 ${r.latency_ms}ms ｜ 分段 ${JSON.stringify(r.stage_breakdown_ms||{})} ｜ trace ${r.trace_id}`
+      + (r.reason?` ｜ 原因：${r.reason}`:'');
+}
+$('ask').onclick = async () => {
+  const btn=$('ask'); btn.disabled=true; $('stage').textContent='检索中…';
+  try{
+    const body={question:$('q').value, use_cache:true};
+    if($('dept').value) body.dept=$('dept').value;
+    const r = await fetch('/api/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json());
+    render(r); $('stage').textContent='';
+  }catch(e){ $('stage').textContent='请求失败：'+e; }
+  btn.disabled=false;
+};
+$('askStream').onclick = () => {
+  $('stage').textContent='建立 SSE 连接…';
+  const body={question:$('q').value};
+  if($('dept').value) body.dept=$('dept').value;
+  fetch('/api/ask/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+   .then(resp=>{
+     const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf='';
+     const pump=()=>reader.read().then(({done,value})=>{
+       if(done){$('stage').textContent='';return;}
+       buf+=dec.decode(value,{stream:true});
+       const parts=buf.split('\n\n'); buf=parts.pop();
+       parts.forEach(p=>{
+         const ev=(p.match(/^event: (.*)$/m)||[])[1];
+         const dt=(p.match(/^data: (.*)$/m)||[])[1];
+         if(!dt) return;
+         const data=JSON.parse(dt);
+         if(ev==='stage'){ $('stage').textContent='▸ '+data.msg; }
+         if(ev==='result'){ render(data); $('stage').textContent='✓ 完成'; }
+       });
+       pump();
+     }); pump();
+   }).catch(e=>$('stage').textContent='SSE 失败：'+e);
+};
+loadStats();
+</script>
+</body>
+</html>
