@@ -66,7 +66,7 @@ class ZhishuPipeline:
 
             with trace.span("embed", kind="embed"):
                 # -------- 只对 child 建向量（父块不参与向量检索）--------
-                # 面试考点：为什么父块不建向量？
+                # 设计要点：为什么父块不建向量？
                 #   → 父块是"生成上下文"，不是"检索单元"。若父块也建向量，
                 #     它会和子块在同一空间竞争，且大块向量语义被稀释，
                 #     反而拉低召回精度。父子块的正确用法是：
@@ -115,7 +115,7 @@ class ZhishuPipeline:
     def _drop_doc_vectors(self, doc_id: str) -> None:
         """
         幂等：同一文档重新入库时先清掉旧向量。
-        面试坑：Milvus 的 delete 要求 collection 已 load，否则报
+        容易踩的坑：Milvus 的 delete 要求 collection 已 load，否则报
         "collection not loaded"。新手常在这里栽跟头 —— 所以先 load 再 delete。
         """
         try:

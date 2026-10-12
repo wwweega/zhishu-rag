@@ -3,7 +3,7 @@
 ============================================================
 简历原文：「再经 bge-reranker-v2 重排」
 
-为什么召回之后还要重排（面试必问）：
+为什么召回之后还要重排：
   召回用的是 **双塔模型（bi-encoder）**：query 和 doc 分别编码成向量，
   只计算向量距离。优点是快（可预计算、可 ANN 索引），
   缺点是 query 与 doc **没有交互**，细粒度的相关性判断不准。
@@ -14,7 +14,7 @@
 
   标准流水线：
     BM25+向量 召回 top-20（便宜、广） → Reranker 精排 top-6（贵、准） → 喂 LLM
-  面试结论一句话：**召回求全（recall），重排求准（precision）。**
+  一句话结论：**召回求全（recall），重排求准（precision）。**
 
 诚实标注：简历写的是 bge-reranker-v2，本项目默认用百炼的 gte-rerank-v2
 （同类交叉编码器 reranker，API 形态一致）。两者可互换，settings.rerank_model 切换；
@@ -48,13 +48,13 @@ def expand_parent(candidates: list[RerankResult]) -> list[RerankResult]:
     """
     small-to-big 的"big"这一步：命中 child 后回溯它的父块，用父块喂 LLM。
 
-    面试核心考点：为什么检索用 child、生成用 parent？
+    核心问题：为什么检索用 child、生成用 parent？
       · child（小块）向量聚焦，召回准；
       · parent（大块）上下文完整，LLM 能读懂前后文，不会断章取义。
       这个函数就是连接两者的桥梁 —— 简历里"检索用小块、生成喂父块"
       指的就是它。若缺了这一步，父子块就白建了（只剩检索，没有生成增益）。
 
-    注意若干细节（面试会追问）：
+    注意若干细节：
       1. 多个 child 可能属于同一 parent → 必须**去重**，否则同一份父块
          被重复塞进 prompt，既浪费 token 又稀释其他证据。
       2. 去重后父块数量可能变少 → 重新编号（证据1..N），保证编号连续。
@@ -157,7 +157,7 @@ GENERATE_SYSTEM = """你是一名严谨的企业知识库问答助手。你必�
 def build_evidence_block(candidates: list[RerankResult]) -> tuple[str, dict[int, str]]:
     """
     把候选块拼成带编号的证据区。
-    面试考点：为什么要给证据编号？
+    设计要点：为什么要给证据编号？
       → 让模型"引用"而不是"复述"。没有编号，模型无法指认出处，
         引用溯源就无从校验；有编号，我们就能做**机器校验**（见 validate_citations）。
     """
@@ -216,7 +216,7 @@ def generate_answer(query: str, candidates: list[RerankResult],
 
     # ---------- 防线 ③：证据不足拒答（先于模型自报，客观门槛）----------
     #
-    # 面试考点（这里踩过一个真实的坑）：
+    # 设计要点（这里踩过一个真实的坑）：
     #   早期用「rerank 原始分 < 固定阈值 0.35」判拒答，结果**假拒答**频发——
     #   因为不同 reranker（百炼 gte-rerank / 本地 bge / mock）的分数量纲完全不同，
     #   百炼对一条真正相关的 block 也可能只给 0.19，远低于 0.35，直接把正确文档拒了。
@@ -262,7 +262,7 @@ def _backfill_citations(answer: str, citations: list, id_map: dict[int, str]) ->
     """
     从 answer 正文里的 [证据N] 提取编号，补齐/校正 citations。
 
-    规则（面试会问为什么这么做）：
+    规则：
       · 以 answer 正文的 [证据N] 为准 —— 因为那是用户真正看到的溯源标记，
         必须"看到什么、就能点到什么"。
       · 保留 citations 里已有的 quote（那是模型摘录的原文，有价值）。
@@ -292,7 +292,7 @@ def _backfill_citations(answer: str, citations: list, id_map: dict[int, str]) ->
 
 def validate_citations(citations: list, id_map: dict[int, str]) -> list:
     """
-    引用校验（面试高频追问：你怎么保证模型不乱标引用？）：
+    引用校验（常见疑问追问：你怎么保证模型不乱标引用？）：
 
       · evidence_id 必须落在真实证据编号范围内，否则丢弃（幻觉引用）。
       · quote 必须能在对应证据原文里找到（归一化子串匹配），找不到则 verified=false。
@@ -338,7 +338,7 @@ def validate_citations(citations: list, id_map: dict[int, str]) -> list:
 def _backfill_quote(c: dict, id_map: dict[int, str], max_len: int = 120) -> dict:
     """
     若模型没给 quote（或给了空串），用证据原文的前若干字兜底。
-    面试考点：这不是"编造引用"，而是"把可核对的原文摆出来"——
+    设计要点：这不是"编造引用"，而是"把可核对的原文摆出来"——
       · 原文来自我们真正喂给模型的证据块，非模型生成；
       · 因此必然 verified=true，用户点开就能在来源里对上；
       · 同时保留 quote_source 标记，区分"模型摘录"与"系统兜底"，
@@ -363,7 +363,7 @@ _QUOTE_CACHE_MAX = 4096  # 上限，防止长驻服务把证据原文无限缓�
 def _register_evidence_text(eid: int, chunk_id: str, text: str) -> None:
     """
     登记"喂给模型的证据原文"，供引用校验做逐字比对。
-    面试考点：为什么要有上限？
+    设计要点：为什么要有上限？
       → 这是进程级全局缓存，QPS 高时不设上限会随请求量线性增长，属于典型内存泄漏。
         这里用最朴素的 FIFO 淘汰（够用即可，无需上 LRU 库）；
         生产环境更稳妥的做法是把证据原文放在单次请求的上下文里（避免跨请求污染），

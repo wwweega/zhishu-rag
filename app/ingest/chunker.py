@@ -4,7 +4,7 @@
 简历原文：「语义分块 + 父子块 small-to-big（检索用小块、生成喂父块）
            + LLM 生成块级标题与摘要」
 
-为什么需要父子块（面试核心考点）：
+为什么需要父子块：
   这是 RAG 里最经典的矛盾 ——
     · 块太大：向量被"稀释"，一篇文章混成一个向量，召回不准；
     · 块太小：检索准了，但喂给 LLM 的上下文太碎，答不全、易断章取义。
@@ -55,7 +55,7 @@ class Chunk:
 def estimate_tokens(text: str) -> int:
     """
     粗估 token 数。中文约 1 token ≈ 1.5 汉字；英文约 1 token ≈ 4 字符。
-    面试考点：为什么要估而不是精确算？
+    设计要点：为什么要估而不是精确算？
       → 分块阶段还没调 LLM，没有精确 usage。估算用于"块大小控制"足够，
         真正计费以 API 返回的 usage 为准（见 observability.record_llm）。
     """
@@ -95,7 +95,7 @@ def semantic_chunk_blocks(blocks: list[ParsedBlock], target_size: int,
             chunks.append(Chunk(chunk_id="", doc_id="", text=text,
                                 token_est=estimate_tokens(text), title=title))
         # -------- 重叠窗口 --------
-        # 面试考点：重叠有什么用？
+        # 设计要点：重叠有什么用？
         #   → 防止"答案正好横跨两块边界"导致两块都只命中半句。
         #     保留尾部若干句进入下一块，让上下文连续。
         # 注意（真实 bug）：早期实现里 `buf = keep if keep_tok < buf_tokens else []`，
@@ -139,7 +139,7 @@ def build_parent_child(semantic_chunks: list[Chunk], group_size: int = 3) -> tup
     """
     L2 父子块：把 group_size 个相邻语义块合并为一个 parent。
 
-    面试追问：group_size 怎么定？
+    追问：group_size 怎么定？
       → 它决定"生成时的上下文窗口"。太大 → 引入噪声、token 贵；
         太小 → 又退化成小块。经验值 2~4，本项目取 3。
         最终应以评测集上的 Faithfulness / Answer Relevancy 调优，

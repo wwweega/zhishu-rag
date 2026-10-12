@@ -1,7 +1,7 @@
 """
 知枢 · 可观测与成本追踪
 ============================================================
-面试考点：RAG 系统为什么必须做全链路观测？
+设计要点：RAG 系统为什么必须做全链路观测？
 
   一个 RAG 问答"慢"，可能是四段里任意一段：
     ① 解析（OCR / 表格还原）  ② 召回（向量 + BM25）  ③ 重排（reranker）  ④ 生成（LLM）
@@ -100,7 +100,7 @@ class TraceRecorder:
     """
     一次问答 / 一次入库任务的完整调用树。
 
-    面试追问：为什么手写而不直接上 Langfuse？
+    追问：为什么手写而不直接上 Langfuse？
       → 生产我会用 Langfuse / OTel Collector；这里手写是为了把
         trace_id / parent_span_id 的父子关系讲透 —— 这正是模型服务
         里最基础的分布式追踪模型，也是"能定位慢在哪一步"的根。
@@ -163,7 +163,7 @@ class TraceRecorder:
         """
         真实墙钟耗时 = 所有 span 里「最晚结束」减「最早开始」。
 
-        面试考点：为什么不是 `max(某个 span 的 latency)`？
+        设计要点：为什么不是 `max(某个 span 的 latency)`？
           → RAG 的四个阶段是顺序执行的，最长的那一段绝不等于端到端。
             只有取时间区间并集才是"用户实际等了多久"。
             这个口径错误在「运营智脑」项目里真实出现过（偏差 3.7 倍），
@@ -178,9 +178,9 @@ class TraceRecorder:
 
     def stage_breakdown(self) -> dict[str, float]:
         """
-        按阶段归并耗时 —— 面试时直接给出"慢在哪一段"。
+        按阶段归并耗时 —— 一眼看出"慢在哪一段"。
 
-        面试考点（这里藏着一个真实 bug）：
+        设计要点（这里藏着一个真实 bug）：
           早期实现是 `sum(每个同 kind span 的 latency)`。但一个阶段内部常常
           **嵌套了子 span**：例如 retrieve 阶段下挂着 query_rewrite / vector_recall
           / hyde / bm25_recall / rrf_fusion 五个子 span。直接求和会把子 span 的耗时

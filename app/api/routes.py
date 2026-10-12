@@ -48,7 +48,7 @@ class AskResponse(BaseModel):
 @router.get("/health", summary="健康检查：各依赖的真实可用状态")
 def health() -> dict:
     """
-    面试考点：健康检查为什么要报告"降级状态"而不是简单的 ok？
+    设计要点：健康检查为什么要报告"降级状态"而不是简单的 ok？
       → 一个跑在 SQLite + 内存缓存上的实例，和跑在 PG + Redis 上的实例，
         可用性 SLA 完全不同。健康检查必须能区分"活着"和"活在降级模式"，
         否则运维会误判容量。

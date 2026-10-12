@@ -1,7 +1,7 @@
 """
 知枢 · LLM / Embedding / Rerank 统一客户端
 ============================================================
-面试考点：为什么要包一层 client，而不直接在业务里调 openai？
+设计要点：为什么要包一层 client，而不直接在业务里调 openai？
 
   1. 换供应商不动业务代码 —— 百炼 / DeepSeek / OpenAI 都是 OpenAI 兼容协议，
      差异只在 base_url + model 名，抽象掉之后业务层零感知。
@@ -51,7 +51,7 @@ class DeterministicError(Exception):
 # ============================================================
 def classify_http_error(status: int, body: str = "") -> type[Exception]:
     """
-    面试考点：429 和 400 的区别？
+    设计要点：429 和 400 的区别？
       → 429 Too Many Requests 是"你太快了"，退避后重试通常能成功。
       → 400 Bad Request 是"你请求写错了"，重试 100 次也一样错，只会烧钱。
       把它们混为一谈（无脑重试）是新手最常见的生产事故来源。

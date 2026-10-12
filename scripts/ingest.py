@@ -7,7 +7,7 @@
   python -m scripts.ingest --dir docs/ --dept 人力资源
   python -m scripts.ingest --rebuild           # 先清空知识库再入库（避免历史残留）
 
-面试考点：
+设计要点：
   - 入库是**幂等**的（doc_id 基于路径哈希），重复入库同一文件是"覆盖"不是"追加"；
   - 但"删除旧文档"只删向量不删实体文件的场景下，切换语料仍可能残留，
     因此提供 --rebuild 走"清空 + 重建"的干净路径，便于复现实验。

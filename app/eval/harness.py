@@ -8,7 +8,7 @@
   2. **答案相关性 Answer Relevancy**：答案是否**切题**（防答非所问）。
   3. **上下文召回率 Context Recall**：正确回答所需的信息，是否**被检索到**。
 
-为什么评测必须对接 CI（面试核心）：
+为什么评测必须对接 CI：
   → 没有门禁的评测就是"看一眼报告就过去了"。RAG 系统改一个 prompt、
     换个模型、调个 chunk_size，效果都可能退化；如果每次都靠人肉判断，
     迟早会带着退化上线。把阈值写进 CI，**退化就自动阻断合并** ——
@@ -273,7 +273,7 @@ def write_markdown_report(summary: dict, samples: list[EvalSample]) -> Path:
 def check_gate(summary: dict, thresholds: dict[str, float] | None = None) -> tuple[bool, list[str]]:
     """
     CI 门禁：所有指标都必须 ≥ 阈值，否则判定失败（阻断合并）。
-    面试考点：为什么门禁要"全部通过"而不是"平均分达标"？
+    设计要点：为什么门禁要"全部通过"而不是"平均分达标"？
       → 平均分会掩盖短板。忠实度 0.5 + 相关性 1.0 平均 0.75 看着还行，
         但 0.5 的忠实度意味着**每两个答案就有一个在编**，这是不可接受的。
         所以按**单项下限**卡，而不是看总分。

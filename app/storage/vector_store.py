@@ -1,7 +1,7 @@
 """
 知枢 · 向量存储层（Milvus，带本地降级）
 ============================================================
-面试考点：Milvus / Qdrant / pgvector 怎么选？
+设计要点：Milvus / Qdrant / pgvector 怎么选？
 
   · Milvus：分布式、十亿级、支持多种索引（HNSW/IVF/DiskANN），
             适合"独立扩容、数据量大、要独立运维"的场景。本项目选它
@@ -13,7 +13,7 @@
         把"重检索"和"重事务"分开，各自选型。
         如果规模在百万以内，我会反过来直接用 pgvector 少运维一套。
 
-设计要点（面试会问）：
+设计要点：
   1. collection schema：主键 / 向量 / 标量字段（用于元数据过滤）
   2. 索引：HNSW（M=16, efConstruction=200）—— 召回率与内存的平衡点
   3. 一致性：Milvus 默认 eventual；插入后要 flush 才能被检索到
@@ -124,7 +124,7 @@ class MilvusVectorStore(VectorStore):
         if not rows[0]:
             return 0
         self.collection.insert(rows)
-        # 面试点：Milvus 是"写后可见性最终一致"，flush 后才能保证被检索到
+        # 设计考虑：Milvus 是"写后可见性最终一致"，flush 后才能保证被检索到
         self.collection.flush()
         return len(rows[0])
 
@@ -149,7 +149,7 @@ class MilvusVectorStore(VectorStore):
     def drop(self) -> None:
         """
         清空向量数据。
-        面试坑：Milvus 删除 collection 后，本对象持有的 self.collection 句柄就失效了，
+        容易踩的坑：Milvus 删除 collection 后，本对象持有的 self.collection 句柄就失效了，
         再 insert 会报 "collection not found"。正确做法是 **drop 后立刻重建**，
         并把 self.collection 重新指向新 collection —— 这样 drop() 可以安全地
         被"清库重导"流程反复调用，符合大家对 clear()/drop() 的直觉。
@@ -169,7 +169,7 @@ class MilvusVectorStore(VectorStore):
 class LocalVectorStore(VectorStore):
     """
     无 Milvus 时用。把向量存成 .npy + 元数据 jsonl，检索时全量点积。
-    面试考点：什么时候可以暴力检索？
+    设计要点：什么时候可以暴力检索？
       → 数据量 < 10 万且 QPS 不高时，暴力检索（brute force）完全够用，
         而且零运维。HNSW 的近似召回在低延迟高并发下才必要。
         "先量一量规模再选型"比"一上来就上分布式"更专业。
@@ -268,7 +268,7 @@ def _match_expr(meta: dict, expr: str) -> bool:
 # ============================================================
 def build_vector_store() -> VectorStore:
     """
-    面试考点：为什么在这里 try/except 而不是让上层处理？
+    设计要点：为什么在这里 try/except 而不是让上层处理？
       → 中间件可用性是部署环境问题，不该污染业务逻辑。
         在"工厂"这一层把降级决策做完，业务层永远只看到 VectorStore 接口。
         同时必须**大声打日志**，否则线上会静默跑在降级模式而不自知。
