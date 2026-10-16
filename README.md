@@ -40,7 +40,7 @@ cp .env.example .env
 # 3. 一键端到端演示（入库 → 检索 → 生成 → 引用校验 → 缓存验证）
 python -m scripts.demo
 
-# 4. 跑测试（34 个，全部走降级后端，无需任何外部服务）
+# 4. 跑测试（35 个，全部走降级后端，无需任何外部服务）
 python -m pytest tests/ -q
 
 # 5. 启动服务
@@ -128,7 +128,7 @@ context_recall      1.0     llm_judge           0.7
 单次问答成本        ≈ $0.0009
 ```
 
-**单测**：`34 passed`。
+**单测**：`35 passed`。
 
 ---
 
@@ -151,6 +151,7 @@ context_recall      1.0     llm_judge           0.7
 13. **`stage_breakdown` 对嵌套 span 重复求和** → 阶段耗时（10690ms）**超过**端到端墙钟（5950ms）。改为按阶段取**时间区间并集**。
 14. **拿 rerank 绝对分比固定阈值判拒答** → 百炼 gte-rerank 对真正相关的块也只给 ~0.19 分，**假拒答**。改为**批内归一化 + 相对阈值**。
 15. **`expand_parent` 用父块文本覆盖 child** → 引用指向放大后的父块、且诱使模型按位置乱标编号。改为 **child 保留原文（可引用）、父块另存 `parent_text`（做语境）**。
+16. **SQLite 元数据后端漏了 `commit()`** → PostgreSQL 连接是 autocommit 所以没暴露，换到 SQLite 后日志显示"入库 2 篇"，但新进程读库永远是 0 篇（写入随进程退出回滚）。这会一路传导成"检索明明有结果、看板文档数却是 0"。改为写操作后显式提交，并补了跨连接读回的回归测试（`test_meta_store_sqlite_persists_across_connections`）。
 
 > 这些坑的共同点：**不报错，但结果变差**。所以本项目的原则是"**跑通不算数，要跑对**" ——
 > 每一处修复都配一个回归测试（见 `tests/test_core.py`）。
@@ -171,7 +172,7 @@ zhishu-rag/
 │   ├── api/           # FastAPI 路由（含 SSE 流式）
 │   ├── pipeline.py    # 门面：ingest / ask / stats
 │   └── main.py        # 应用入口
-├── tests/             # 34 个测试，全部降级模式可跑
+├── tests/             # 35 个测试，全部降级模式可跑
 ├── scripts/           # demo / ingest / run_eval / reproduce
 ├── frontend/          # 单文件演示 UI（SSE 流式 + 引用高亮）
 ├── data/corpus/       # 示例语料

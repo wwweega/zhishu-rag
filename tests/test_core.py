@@ -401,6 +401,37 @@ class TestStorageFallback:
         assert meta["tc1"]["dept"] == "测试部"
         m.clear()
 
+    def test_meta_store_sqlite_persists_across_connections(self):
+        """回归：SQLite 元数据后端必须显式 commit —— 否则写入在进程退出时回滚，
+        表现为「入库日志显示成功、但新进程读库是空的」（本项目真实踩过的坑）。
+        PostgreSQL 连接是 autocommit，所以只有 SQLite 会漏。"""
+        import sqlite3
+        from pathlib import Path
+
+        from app.core.config import settings
+        from app.storage.meta_store import get_meta_store
+
+        m = get_meta_store()
+        m.upsert_document({"doc_id": "persist1", "title": "持久化验证", "dept": "测试部"})
+        m.insert_chunks([{"chunk_id": "pc1", "doc_id": "persist1", "text": "内容"}])
+
+        # 用一条独立连接读回（等价于"另一个进程"），验证数据确实已落盘
+        db = Path(settings.index_dir) / "zhishu_meta.db"
+        conn = sqlite3.connect(str(db))
+        try:
+            docs = conn.execute(
+                "SELECT COUNT(*) FROM documents WHERE doc_id = 'persist1'"
+            ).fetchone()[0]
+            chunks = conn.execute(
+                "SELECT COUNT(*) FROM chunks WHERE chunk_id = 'pc1'"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+
+        assert docs == 1, "documents 未落盘：写入缺少 commit"
+        assert chunks == 1, "chunks 未落盘：写入缺少 commit"
+        m.clear()
+
     def test_memory_cache_lru(self):
         from app.storage.cache import MemoryCache
         c = MemoryCache(maxsize=2)

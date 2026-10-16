@@ -110,6 +110,10 @@ class MetaStore:
         if fetch:
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
+        if self.backend == "sqlite":
+            # PostgreSQL 连接是 autocommit，SQLite 默认走隐式事务：
+            # 不显式提交的话，写入在进程退出时全部回滚（表现为「入库成功但库是空的」）。
+            self._conn.commit()
         return cur.rowcount
 
     # ---------------- 写入 ----------------
