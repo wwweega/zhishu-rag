@@ -11,6 +11,8 @@
   <img alt="license" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 
+![真实模型问答：答案逐句挂引用、引用逐字比对原文，证据不足即拒答（qwen-plus + text-embedding-v3 + gte-rerank-v2）](docs/images/demo-qa.png)
+
 ---
 
 ## 一、这个项目解决什么问题
