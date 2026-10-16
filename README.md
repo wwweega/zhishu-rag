@@ -6,10 +6,9 @@
 > 除了把答案找出来，重点解决三个生产环境的实际问题：引用可溯源、答不了就拒答、慢在哪能说清。
 
 <p align="left">
+  <a href="https://github.com/wwweega/zhishu-rag/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/wwweega/zhishu-rag/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="python" src="https://img.shields.io/badge/python-3.11-blue">
-  <img alt="tests" src="https://img.shields.io/badge/tests-34%20passed-brightgreen">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-green">
-  <img alt="eval" src="https://img.shields.io/badge/eval_gate-passed-brightgreen">
 </p>
 
 ---
